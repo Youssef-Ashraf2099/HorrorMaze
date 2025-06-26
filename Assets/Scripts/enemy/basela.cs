@@ -14,8 +14,14 @@ public class basela : Enemy
 
     protected override void OnPlayerCaught()
     {
-        // Example: Take all player's money (implement your own logic here)
-        Debug.Log($"{name}: Player caught by basela! All money lost.");
+        Debug.Log($"{name}: Player caught by basela! All keys lost and respawned.");
+
+        // Call the GameManager to handle key reset and respawning
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.ResetAndRespawnCollectables();
+        }
+
         TriggerJumpscare();
         // Add additional effects here
     }

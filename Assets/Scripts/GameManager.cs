@@ -50,12 +50,21 @@ public class GameManager : MonoBehaviour
             GameObject spawnPoint = randomizedSpawnPoints[i];
             Instantiate(collectablePrefab, spawnPoint.transform.position, spawnPoint.transform.rotation);
         }
+    }
 
-        // Clean up by destroying all spawn point GameObjects
-        foreach (GameObject sp in spawnPoints)
+    public void ResetAndRespawnCollectables()
+    {
+        // Find and destroy all existing collectables
+        GameObject[] existingCollectables = GameObject.FindGameObjectsWithTag("Collectable");
+        foreach (GameObject collectable in existingCollectables)
         {
-            Destroy(sp);
+            Destroy(collectable);
         }
+
+        // Reset coin count and spawn new ones
+        coinCount = 0;
+        SpawnCollectables();
+        UpdateCoinUI();
     }
 
     public void AddCoin()
