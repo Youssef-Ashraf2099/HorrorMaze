@@ -25,7 +25,7 @@ public abstract class Enemy : MonoBehaviour
     public Transform[] patrolPoints;
     public Camera mainCamera;
     public Camera jumpscareCamera;
-
+    public float jumpscareDuration = 2.5f;
 
     [Header("State")]
     public EnemyState currentState = EnemyState.Idle;
@@ -34,6 +34,10 @@ public abstract class Enemy : MonoBehaviour
     protected NavMeshAgent agent;
     private int currentPatrolIndex = 0;
     protected Transform player;
+    protected playerMovment playerMovement; // Add this line
+   
+    protected Vector3 initialPosition;
+    protected Quaternion initialRotation;
 
 
 
@@ -58,11 +62,19 @@ public abstract class Enemy : MonoBehaviour
     }
     protected virtual void Start()
     {
+        initialPosition = transform.position;
+        initialRotation = transform.rotation;
 
         agent = GetComponent<NavMeshAgent>(); // Add this line
         agent.speed = speed;                  // Also set the agent's speed
-
+                                              
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
+
+        // --- THEN, get the movement component from the player ---
+        if (player != null)
+        {
+            playerMovement = player.GetComponent<playerMovment>();
+        }
         if (player == null)
         {
             Debug.LogWarning($"{name}: Player not found in the scene. Enemy will not function properly.");
@@ -116,6 +128,18 @@ public abstract class Enemy : MonoBehaviour
 
     protected abstract void OnPlayerCaught();
 
+    protected virtual void Respawn()
+    {
+        // Use agent.Warp() to instantly teleport the NavMeshAgent
+        if (agent != null)
+        {
+            agent.Warp(initialPosition);
+        }
+        transform.rotation = initialRotation;
+
+        // Reset the enemy's state to start its cycle over
+        currentState = EnemyState.Idle;
+    }
     protected virtual void IdleBehavior()
     {
         if (CanSeePlayer() || Vector3.Distance(transform.position, player.position) < aggroRange)
@@ -210,11 +234,16 @@ public abstract class Enemy : MonoBehaviour
 
     public virtual void TriggerJumpscare()
     {
+        if (playerMovement != null) playerMovement.SetInputActive(false);// Freeze player
+
         SwitchToJumpscareCamera();
         if (jumpscareSound != null)
             AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
         if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
             animator.SetTrigger(jumpscareAnimationTrigger);
+
+        // Switch back to the main camera after the jumpscare is over
+        Invoke(nameof(SwitchToMainCamera), jumpscareDuration);
     }
 
     public virtual void Stun(float duration)
@@ -232,13 +261,16 @@ public abstract class Enemy : MonoBehaviour
 
     protected void SwitchToJumpscareCamera()
     {
-        if (mainCamera != null) mainCamera.enabled = false;
-        if (jumpscareCamera != null) jumpscareCamera.enabled = true;
+        if (mainCamera != null) mainCamera.gameObject.SetActive(false);
+        if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(true);
     }
 
     protected void SwitchToMainCamera()
     {
-        if (mainCamera != null) mainCamera.enabled = true;
-        if (jumpscareCamera != null) jumpscareCamera.enabled = false;
+        if (mainCamera != null) mainCamera.gameObject.SetActive(true);
+        if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(false);
+        if (playerMovement != null) playerMovement.SetInputActive(true);
+
+        Respawn();
     }
 }

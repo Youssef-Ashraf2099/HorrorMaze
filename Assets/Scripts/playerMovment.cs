@@ -134,4 +134,15 @@ public class playerMovment : MonoBehaviour
             Jump.Disable();
         }
     }
+    public void SetInputActive(bool active)
+    {
+        if (active)
+        {
+            inputActions.Enable();
+        }
+        else
+        {
+            inputActions.Disable();
+        }
+    }
 }
