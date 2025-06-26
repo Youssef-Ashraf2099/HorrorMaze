@@ -20,6 +20,9 @@ public abstract class Enemy : MonoBehaviour
     public AudioClip[] enemySounds; // Footsteps, idle, chase, jumpscare, etc.
     public Animator animator;
     public Transform[] patrolPoints;
+    public Camera mainCamera;
+    public Camera jumpscareCamera;
+
 
     [Header("State")]
     public EnemyState currentState = EnemyState.Idle;
@@ -113,6 +116,7 @@ public abstract class Enemy : MonoBehaviour
 
     public virtual void TriggerJumpscare()
     {
+        SwitchToJumpscareCamera();
         // To be implemented in subclass or extended here
     }
 
@@ -126,4 +130,16 @@ public abstract class Enemy : MonoBehaviour
     {
         currentState = EnemyState.Idle;
     }
+    protected void SwitchToJumpscareCamera()
+    {
+        if (mainCamera != null) mainCamera.enabled = false;
+        if (jumpscareCamera != null) jumpscareCamera.enabled = true;
+    }
+
+    protected void SwitchToMainCamera()
+    {
+        if (mainCamera != null) mainCamera.enabled = true;
+        if (jumpscareCamera != null) jumpscareCamera.enabled = false;
+    }
+
 }
