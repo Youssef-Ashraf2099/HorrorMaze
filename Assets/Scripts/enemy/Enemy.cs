@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using UnityEngine.AI;
 public enum EnemyState
 {
     Idle,
@@ -16,6 +16,7 @@ public abstract class Enemy : MonoBehaviour
     public float visionDistance = 10.0f;
     public float fieldOfView = 120.0f;
     public float aggroRange = 8.0f;
+    public float attackRange = 2.0f;
     public float attackCooldown = 2.0f;
     public AudioClip[] enemySounds; // Footsteps, idle, chase, etc.
     public AudioClip jumpscareSound; // Dedicated jumpscare sound
@@ -25,14 +26,42 @@ public abstract class Enemy : MonoBehaviour
     public Camera mainCamera;
     public Camera jumpscareCamera;
 
+
     [Header("State")]
     public EnemyState currentState = EnemyState.Idle;
     protected float lastAttackTime;
 
+    protected NavMeshAgent agent;
+    private int currentPatrolIndex = 0;
     protected Transform player;
 
+
+
+    protected virtual void OnDrawGizmosSelected()
+    {
+        // Draw the vision cone
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, visionDistance);
+
+        Vector3 fovLine1 = Quaternion.AngleAxis(fieldOfView * 0.5f, transform.up) * transform.forward * visionDistance;
+        Vector3 fovLine2 = Quaternion.AngleAxis(-fieldOfView * 0.5f, transform.up) * transform.forward * visionDistance;
+        Gizmos.DrawLine(transform.position, transform.position + fovLine1);
+        Gizmos.DrawLine(transform.position, transform.position + fovLine2);
+
+        // Draw the aggro range
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, aggroRange);
+
+        // Draw the attack range
+        Gizmos.color = Color.magenta;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+    }
     protected virtual void Start()
     {
+
+        agent = GetComponent<NavMeshAgent>(); // Add this line
+        agent.speed = speed;                  // Also set the agent's speed
+
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
         if (player == null)
         {
@@ -66,6 +95,8 @@ public abstract class Enemy : MonoBehaviour
 
     protected virtual void Update()
     {
+        if (player == null || currentState == EnemyState.Stunned) return;
+
         switch (currentState)
         {
             case EnemyState.Idle:
@@ -80,19 +111,78 @@ public abstract class Enemy : MonoBehaviour
             case EnemyState.Attacking:
                 AttackBehavior();
                 break;
-            case EnemyState.Stunned:
-                StunnedBehavior();
-                break;
         }
     }
 
     protected abstract void OnPlayerCaught();
 
-    protected virtual void IdleBehavior() { }
-    protected virtual void PatrolBehavior() { }
-    protected virtual void ChaseBehavior() { }
-    protected virtual void AttackBehavior() { }
-    protected virtual void StunnedBehavior() { }
+    protected virtual void IdleBehavior()
+    {
+        if (CanSeePlayer() || Vector3.Distance(transform.position, player.position) < aggroRange)
+        {
+            currentState = EnemyState.Chasing;
+        }
+        else if (patrolPoints != null && patrolPoints.Length > 0)
+        {
+            currentState = EnemyState.Patrolling;
+        }
+    }
+
+    protected virtual void PatrolBehavior()
+    {
+        if (CanSeePlayer() || Vector3.Distance(transform.position, player.position) < aggroRange)
+        {
+            currentState = EnemyState.Chasing;
+            return;
+        }
+
+        if (patrolPoints == null || patrolPoints.Length == 0 || !agent.hasPath || agent.remainingDistance < 0.5f)
+        {
+            if (patrolPoints != null && patrolPoints.Length > 0)
+            {
+                currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.Length;
+                agent.SetDestination(patrolPoints[currentPatrolIndex].position);
+            }
+            else
+            {
+                currentState = EnemyState.Idle;
+            }
+        }
+    }
+
+    protected virtual void ChaseBehavior()
+    {
+        if (!CanSeePlayer() && Vector3.Distance(transform.position, player.position) > aggroRange)
+        {
+            currentState = (patrolPoints != null && patrolPoints.Length > 0) ? EnemyState.Patrolling : EnemyState.Idle;
+            return;
+        }
+
+        agent.SetDestination(player.position);
+
+        if (Vector3.Distance(transform.position, player.position) < attackRange)
+        {
+            currentState = EnemyState.Attacking;
+        }
+    }
+
+    protected virtual void AttackBehavior()
+    {
+        agent.ResetPath();
+        transform.LookAt(player);
+
+        if (Time.time > lastAttackTime + attackCooldown)
+        {
+            lastAttackTime = Time.time;
+            OnPlayerCaught();
+        }
+        else
+        {
+            currentState = EnemyState.Chasing;
+        }
+    }
+
+    protected virtual void StunnedBehavior() { /* Stun logic here */ }
 
     protected bool CanSeePlayer()
     {
@@ -102,11 +192,9 @@ public abstract class Enemy : MonoBehaviour
 
         if (directionToPlayer.magnitude < visionDistance && angle < fieldOfView * 0.5f)
         {
-            RaycastHit hit;
-            if (Physics.Raycast(transform.position, directionToPlayer.normalized, out hit, visionDistance))
+            if (Physics.Raycast(transform.position, directionToPlayer.normalized, out RaycastHit hit, visionDistance))
             {
-                if (hit.transform == player)
-                    return true;
+                return hit.transform == player;
             }
         }
         return false;
@@ -114,54 +202,34 @@ public abstract class Enemy : MonoBehaviour
 
     protected void PlaySound(int index)
     {
-        if (enemySounds == null || enemySounds.Length == 0)
+        if (enemySounds != null && index >= 0 && index < enemySounds.Length)
         {
-            Debug.LogWarning($"{name}: No enemy sounds assigned. Cannot play sound.");
-            return;
+            AudioSource.PlayClipAtPoint(enemySounds[index], transform.position);
         }
-        if (index < 0 || index >= enemySounds.Length)
-        {
-            Debug.LogWarning($"{name}: Sound index {index} is out of range.");
-            return;
-        }
-        AudioSource.PlayClipAtPoint(enemySounds[index], transform.position);
     }
 
     public virtual void TriggerJumpscare()
     {
         SwitchToJumpscareCamera();
-
-        // Play jumpscare sound
         if (jumpscareSound != null)
-        {
             AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
-        }
-        else
-        {
-            Debug.LogWarning($"{name}: No jumpscare sound assigned.");
-        }
-
-        // Play jumpscare animation
         if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
-        {
             animator.SetTrigger(jumpscareAnimationTrigger);
-        }
-        else
-        {
-            Debug.LogWarning($"{name}: Animator or jumpscare animation trigger not assigned.");
-        }
     }
 
     public virtual void Stun(float duration)
     {
         currentState = EnemyState.Stunned;
+        agent.isStopped = true;
         Invoke(nameof(RecoverFromStun), duration);
     }
 
     protected virtual void RecoverFromStun()
     {
         currentState = EnemyState.Idle;
+        agent.isStopped = false;
     }
+
     protected void SwitchToJumpscareCamera()
     {
         if (mainCamera != null) mainCamera.enabled = false;
