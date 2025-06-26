@@ -17,12 +17,13 @@ public abstract class Enemy : MonoBehaviour
     public float fieldOfView = 120.0f;
     public float aggroRange = 8.0f;
     public float attackCooldown = 2.0f;
-    public AudioClip[] enemySounds; // Footsteps, idle, chase, jumpscare, etc.
+    public AudioClip[] enemySounds; // Footsteps, idle, chase, etc.
+    public AudioClip jumpscareSound; // Dedicated jumpscare sound
+    public string jumpscareAnimationTrigger = "Jumpscare"; // Animator trigger for jumpscare
     public Animator animator;
     public Transform[] patrolPoints;
     public Camera mainCamera;
     public Camera jumpscareCamera;
-
 
     [Header("State")]
     public EnemyState currentState = EnemyState.Idle;
@@ -48,6 +49,18 @@ public abstract class Enemy : MonoBehaviour
         if (patrolPoints == null || patrolPoints.Length == 0)
         {
             Debug.LogWarning($"{name}: Patrol points not assigned. Patrolling will not work.");
+        }
+        if (mainCamera == null)
+        {
+            Debug.LogWarning($"{name}: Main camera not assigned.");
+        }
+        if (jumpscareCamera == null)
+        {
+            Debug.LogWarning($"{name}: Jumpscare camera not assigned.");
+        }
+        if (jumpscareSound == null)
+        {
+            Debug.LogWarning($"{name}: Jumpscare sound not assigned.");
         }
     }
 
@@ -117,7 +130,26 @@ public abstract class Enemy : MonoBehaviour
     public virtual void TriggerJumpscare()
     {
         SwitchToJumpscareCamera();
-        // To be implemented in subclass or extended here
+
+        // Play jumpscare sound
+        if (jumpscareSound != null)
+        {
+            AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
+        }
+        else
+        {
+            Debug.LogWarning($"{name}: No jumpscare sound assigned.");
+        }
+
+        // Play jumpscare animation
+        if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
+        {
+            animator.SetTrigger(jumpscareAnimationTrigger);
+        }
+        else
+        {
+            Debug.LogWarning($"{name}: Animator or jumpscare animation trigger not assigned.");
+        }
     }
 
     public virtual void Stun(float duration)
@@ -141,5 +173,4 @@ public abstract class Enemy : MonoBehaviour
         if (mainCamera != null) mainCamera.enabled = true;
         if (jumpscareCamera != null) jumpscareCamera.enabled = false;
     }
-
 }
