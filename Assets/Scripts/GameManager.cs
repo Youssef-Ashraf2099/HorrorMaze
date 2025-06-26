@@ -1,12 +1,16 @@
 using UnityEngine;
 using TMPro;
+using System.Linq;
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
+    public GameObject collectablePrefab; // Assign your collectable prefab in the Inspector
+    public GameObject[] spawnPoints; // Assign your spawn point GameObjects in the Inspector
+    public int numberOfCollectablesToSpawn = 5; // Set how many collectables you want to spawn
     public int coinCount = 0;
-    public int totalCoins = 10;
+    public int totalCoins;
     public TMP_Text coinText;
 
     void Awake()
@@ -19,7 +23,39 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
+        SpawnCollectables();
         UpdateCoinUI();
+    }
+
+    void SpawnCollectables()
+    {
+        // If no spawn points are assigned, do nothing.
+        if (spawnPoints == null || spawnPoints.Length == 0)
+        {
+            Debug.LogWarning("No spawn points assigned in the GameManager.");
+            totalCoins = 0;
+            return;
+        }
+
+        // Randomize the order of the spawn points
+        System.Random rng = new System.Random();
+        GameObject[] randomizedSpawnPoints = spawnPoints.OrderBy(sp => rng.Next()).ToArray();
+
+        // Determine the number of collectables to spawn, ensuring it doesn't exceed available points
+        totalCoins = Mathf.Min(numberOfCollectablesToSpawn, randomizedSpawnPoints.Length);
+
+        // Spawn a collectable at the selected number of random spawn points
+        for (int i = 0; i < totalCoins; i++)
+        {
+            GameObject spawnPoint = randomizedSpawnPoints[i];
+            Instantiate(collectablePrefab, spawnPoint.transform.position, spawnPoint.transform.rotation);
+        }
+
+        // Clean up by destroying all spawn point GameObjects
+        foreach (GameObject sp in spawnPoints)
+        {
+            Destroy(sp);
+        }
     }
 
     public void AddCoin()
