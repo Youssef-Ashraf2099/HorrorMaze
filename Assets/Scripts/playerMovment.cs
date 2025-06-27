@@ -15,6 +15,11 @@ public class playerMovment : MonoBehaviour
     [Header("References")]
     public Transform cameraTransform;
 
+    [Header("Audio")]
+    public AudioSource audioSource;
+    public AudioClip walkingSound;
+    public AudioClip jumpSound;
+
     private CharacterController controller;
     private PlayerInputActions inputActions;
     private Vector2 moveInput;
@@ -54,6 +59,7 @@ public class playerMovment : MonoBehaviour
     {
         HandleMovement();
         HandleLook();
+        HandleAudio();
     }
 
     void HandleMovement()
@@ -68,6 +74,10 @@ public class playerMovment : MonoBehaviour
 
             if (jumpPressed)
             {
+                if (audioSource != null && jumpSound != null)
+                {
+                    audioSource.PlayOneShot(jumpSound);
+                }
                 verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
                 jumpPressed = false;
             }
@@ -93,6 +103,28 @@ public class playerMovment : MonoBehaviour
         cameraPitch -= mouseY;
         cameraPitch = Mathf.Clamp(cameraPitch, -90f, 90f);
         cameraTransform.localEulerAngles = new Vector3(cameraPitch, 0f, 0f);
+    }
+
+    void HandleAudio()
+    {
+        bool isMoving = moveInput.magnitude > 0.1f;
+
+        if (controller.isGrounded && isMoving)
+        {
+            if (audioSource != null && walkingSound != null && !audioSource.isPlaying)
+            {
+                audioSource.clip = walkingSound;
+                audioSource.loop = true;
+                audioSource.Play();
+            }
+        }
+        else
+        {
+            if (audioSource != null && audioSource.clip == walkingSound && audioSource.isPlaying)
+            {
+                audioSource.Stop();
+            }
+        }
     }
 
     // Inline PlayerInputActions class
