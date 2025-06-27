@@ -1,6 +1,6 @@
 using UnityEngine;
 using TMPro;
-using System.Linq;
+using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
 {
@@ -37,12 +37,22 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // Randomize the order of the spawn points
-        System.Random rng = new System.Random();
-        GameObject[] randomizedSpawnPoints = spawnPoints.OrderBy(sp => rng.Next()).ToArray();
+        // Create a temporary list of spawn points to shuffle
+        List<GameObject> randomizedSpawnPoints = new List<GameObject>(spawnPoints);
+
+        // Shuffle the list using the Fisher-Yates algorithm
+        int n = randomizedSpawnPoints.Count;
+        while (n > 1)
+        {
+            n--;
+            int k = Random.Range(0, n + 1); // Use UnityEngine.Random
+            GameObject value = randomizedSpawnPoints[k];
+            randomizedSpawnPoints[k] = randomizedSpawnPoints[n];
+            randomizedSpawnPoints[n] = value;
+        }
 
         // Determine the number of collectables to spawn, ensuring it doesn't exceed available points
-        totalCoins = Mathf.Min(numberOfCollectablesToSpawn, randomizedSpawnPoints.Length);
+        totalCoins = Mathf.Min(numberOfCollectablesToSpawn, randomizedSpawnPoints.Count);
 
         // Spawn a collectable at the selected number of random spawn points
         for (int i = 0; i < totalCoins; i++)
