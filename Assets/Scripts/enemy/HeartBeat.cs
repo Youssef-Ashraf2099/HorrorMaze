@@ -6,7 +6,10 @@ public class HeartBeat : MonoBehaviour
     [Tooltip("The AudioSource component dedicated to playing the heartbeat sound.")]
     public AudioSource heartbeatSource;
 
-    [Header("Animation")]
+    [Header("UI and Animation")]
+    [Tooltip("The UI panel GameObject that contains the heartbeat animation.")]
+    public GameObject heartbeatPanel;
+
     [Tooltip("The Animator component to control for the visual heartbeat effect.")]
     public Animator heartbeatAnimator;
 
@@ -41,36 +44,40 @@ public class HeartBeat : MonoBehaviour
 
     void Start()
     {
+        // Ensure required components are assigned
         if (heartbeatSource == null)
         {
             Debug.LogError("Heartbeat AudioSource is not assigned in the Inspector!", this);
             return;
         }
-
+        if (heartbeatPanel == null)
+        {
+            Debug.LogError("Heartbeat Panel is not assigned in the Inspector!", this);
+            return;
+        }
         if (heartbeatAnimator == null)
         {
             Debug.LogWarning("Heartbeat Animator is not assigned. Visual effect will not play.", this);
         }
 
-        // Configure the AudioSource for the heartbeat effect
+        // Configure the AudioSource and disable the panel by default
         heartbeatSource.clip = heartbeatSound;
         heartbeatSource.loop = true;
         heartbeatSource.playOnAwake = false;
-        heartbeatSource.volume = 0; // Start with no volume
-        heartbeatSource.pitch = minPitch;
+        heartbeatPanel.SetActive(false);
     }
 
     void Update()
     {
-        if (!isHeartbeatActive || heartbeatSource == null) return; // Stop if not active or source is not assigned
+        if (!isHeartbeatActive || heartbeatSource == null) return;
 
         float closestDistance = float.MaxValue;
         Enemy closestEnemy = null;
 
-        // Find the closest enemy from the static list
+        // Find the closest enemy
         foreach (var enemy in Enemy.AllEnemies)
         {
-            if (enemy == null) continue; // Skip if an enemy was destroyed but not yet removed from the list
+            if (enemy == null) continue;
             float distance = Vector3.Distance(transform.position, enemy.transform.position);
             if (distance < closestDistance)
             {
@@ -79,23 +86,23 @@ public class HeartBeat : MonoBehaviour
             }
         }
 
-        // If an enemy is found within the maxDistance
+        // If an enemy is in range
         if (closestEnemy != null && closestDistance <= maxDistance)
         {
-            // Ensure the sound is playing
+            // Enable the panel and start the sound if they aren't already active
+            if (!heartbeatPanel.activeSelf)
+            {
+                heartbeatPanel.SetActive(true);
+            }
             if (!heartbeatSource.isPlaying)
             {
                 heartbeatSource.Play();
             }
 
-            // Calculate the intensity of the effect (0 to 1)
+            // Calculate and apply the intensity to the sound and animation speed
             float intensity = Mathf.InverseLerp(maxDistance, minDistance, closestDistance);
-
-            // Apply the intensity to volume and pitch
             heartbeatSource.volume = Mathf.Lerp(minVolume, maxVolume, intensity);
             heartbeatSource.pitch = Mathf.Lerp(minPitch, maxPitch, intensity);
-
-            // Also apply the intensity to the animator
             if (heartbeatAnimator != null)
             {
                 heartbeatAnimator.SetFloat(intensityParameterName, intensity);
@@ -103,52 +110,31 @@ public class HeartBeat : MonoBehaviour
         }
         else
         {
-            // If no enemy is in range, fade out the sound
+            // If no enemy is in range, disable the panel and stop the sound
+            if (heartbeatPanel.activeSelf)
+            {
+                heartbeatPanel.SetActive(false);
+            }
             if (heartbeatSource.isPlaying)
             {
-                heartbeatSource.volume = Mathf.Lerp(heartbeatSource.volume, 0f, Time.deltaTime * 2);
-                if (heartbeatSource.volume < 0.01f)
-                {
-                    heartbeatSource.Stop();
-                }
-            }
-
-            // Also fade out the animation, snapping to zero to ensure it stops
-            if (heartbeatAnimator != null)
-            {
-                float currentIntensity = heartbeatAnimator.GetFloat(intensityParameterName);
-                if (currentIntensity > 0)
-                {
-                    float newIntensity = Mathf.Lerp(currentIntensity, 0f, Time.deltaTime * 2);
-                    if (newIntensity < 0.01f)
-                    {
-                        newIntensity = 0f; // Snap to zero to guarantee the animation stops
-                    }
-                    heartbeatAnimator.SetFloat(intensityParameterName, newIntensity);
-                }
+                heartbeatSource.Stop();
             }
         }
     }
 
-    /// <summary>
-    /// Immediately stops the heartbeat effect and prevents it from restarting until enabled again.
-    /// </summary>
     public void StopHeartbeatEffect()
     {
         isHeartbeatActive = false;
-        if (heartbeatSource != null)
+        if (heartbeatSource != null && heartbeatSource.isPlaying)
         {
             heartbeatSource.Stop();
         }
-        if (heartbeatAnimator != null)
+        if (heartbeatPanel != null && heartbeatPanel.activeSelf)
         {
-            heartbeatAnimator.SetFloat(intensityParameterName, 0f);
+            heartbeatPanel.SetActive(false);
         }
     }
 
-    /// <summary>
-    /// Allows the heartbeat effect to run again.
-    /// </summary>
     public void EnableHeartbeatEffect()
     {
         isHeartbeatActive = true;
