@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections.Generic; // Required for using List
+
 public enum EnemyState
 {
     Idle,
@@ -11,6 +13,9 @@ public enum EnemyState
 
 public abstract class Enemy : MonoBehaviour
 {
+    // Static list to keep track of all enemy instances
+    public static readonly List<Enemy> AllEnemies = new List<Enemy>();
+
     [Header("Enemy Attributes")]
     public float speed = 3.0f;
     public float visionDistance = 10.0f;
@@ -35,10 +40,27 @@ public abstract class Enemy : MonoBehaviour
     private int currentPatrolIndex = 0;
     protected Transform player;
     protected playerMovment playerMovement; // Add this line
-   
+
     protected Vector3 initialPosition;
     protected Quaternion initialRotation;
 
+    protected virtual void OnEnable()
+    {
+        // Add this enemy to the static list when it becomes active
+        if (!AllEnemies.Contains(this))
+        {
+            AllEnemies.Add(this);
+        }
+    }
+
+    protected virtual void OnDisable()
+    {
+        // Remove this enemy from the list when it becomes inactive or is destroyed
+        if (AllEnemies.Contains(this))
+        {
+            AllEnemies.Remove(this);
+        }
+    }
 
 
     protected virtual void OnDrawGizmosSelected()
@@ -67,7 +89,7 @@ public abstract class Enemy : MonoBehaviour
 
         agent = GetComponent<NavMeshAgent>(); // Add this line
         agent.speed = speed;                  // Also set the agent's speed
-                                              
+
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
 
         // --- THEN, get the movement component from the player ---
@@ -107,7 +129,11 @@ public abstract class Enemy : MonoBehaviour
 
     protected virtual void Update()
     {
-        if (player == null || currentState == EnemyState.Stunned) return;
+        if (player == null || currentState == EnemyState.Stunned)
+        {
+            UpdateAnimator(); // Update animator even when stunned to show idle/stun animation
+            return;
+        }
 
         switch (currentState)
         {
@@ -124,6 +150,27 @@ public abstract class Enemy : MonoBehaviour
                 AttackBehavior();
                 break;
         }
+
+        UpdateAnimator();
+    }
+
+    /// <summary>
+    /// Updates the animator based on the current state of the enemy.
+    /// This method can be overridden by subclasses for custom animation logic.
+    /// </summary>
+    protected virtual void UpdateAnimator()
+    {
+        // Do nothing if no animator is assigned.
+        if (animator == null) return;
+
+        // Use the agent's velocity to drive a "Speed" parameter in the animator.
+        // This is a common pattern for controlling walk/run/idle animations.
+        float normalizedSpeed = agent.velocity.magnitude / agent.speed;
+        animator.SetFloat("Speed", normalizedSpeed);
+
+        // You can also pass the current state to the animator if you have specific
+        // animations for states like Attacking or Stunned.
+        animator.SetInteger("State", (int)currentState);
     }
 
     protected abstract void OnPlayerCaught();

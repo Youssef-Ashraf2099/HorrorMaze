@@ -14,9 +14,9 @@ public class playerMovment : MonoBehaviour
 
     [Header("References")]
     public Transform cameraTransform;
-
+        
     [Header("Audio")]
-    public AudioSource audioSource;
+    public AudioSource movementAudioSource; // Renamed from audioSource
     public AudioClip walkingSound;
     public AudioClip jumpSound;
 
@@ -74,9 +74,9 @@ public class playerMovment : MonoBehaviour
 
             if (jumpPressed)
             {
-                if (audioSource != null && jumpSound != null)
+                if (movementAudioSource != null && jumpSound != null)
                 {
-                    audioSource.PlayOneShot(jumpSound);
+                    movementAudioSource.PlayOneShot(jumpSound);
                 }
                 verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
                 jumpPressed = false;
@@ -111,18 +111,18 @@ public class playerMovment : MonoBehaviour
 
         if (controller.isGrounded && isMoving)
         {
-            if (audioSource != null && walkingSound != null && !audioSource.isPlaying)
+            if (movementAudioSource != null && walkingSound != null && !movementAudioSource.isPlaying)
             {
-                audioSource.clip = walkingSound;
-                audioSource.loop = true;
-                audioSource.Play();
+                movementAudioSource.clip = walkingSound;
+                movementAudioSource.loop = true;
+                movementAudioSource.Play();
             }
         }
         else
         {
-            if (audioSource != null && audioSource.clip == walkingSound && audioSource.isPlaying)
+            if (movementAudioSource != null && movementAudioSource.clip == walkingSound && movementAudioSource.isPlaying)
             {
-                audioSource.Stop();
+                movementAudioSource.Stop();
             }
         }
     }

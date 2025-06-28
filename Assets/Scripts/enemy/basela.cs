@@ -26,6 +26,15 @@ public class basela : Enemy
         // Add additional effects here
     }
 
+    protected override void UpdateAnimator()
+    {
+        // This is where you would put custom animation logic for basela.
+        // For example, maybe it has a "FlyingSpeed" parameter instead of "Speed".
+        // animator.SetFloat("FlyingSpeed", agent.velocity.magnitude);
+
+        // If you want to use the base logic, you can call it directly:
+        base.UpdateAnimator();
+    }
     public override void TriggerJumpscare()
     {
         base.TriggerJumpscare();
