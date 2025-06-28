@@ -6,6 +6,13 @@ public class HeartBeat : MonoBehaviour
     [Tooltip("The AudioSource component dedicated to playing the heartbeat sound.")]
     public AudioSource heartbeatSource;
 
+    [Header("Animation")]
+    [Tooltip("The Animator component to control for the visual heartbeat effect.")]
+    public Animator heartbeatAnimator;
+
+    [Tooltip("The name of the float parameter in the Animator to control the effect's intensity.")]
+    public string intensityParameterName = "HeartbeatIntensity";
+
     [Header("Heartbeat Settings")]
     [Tooltip("The audio clip of the heartbeat sound.")]
     public AudioClip heartbeatSound;
@@ -30,12 +37,19 @@ public class HeartBeat : MonoBehaviour
     [Tooltip("The volume of the heartbeat at minimum distance.")]
     public float maxVolume = 1.0f;
 
+    private bool isHeartbeatActive = true;
+
     void Start()
     {
         if (heartbeatSource == null)
         {
             Debug.LogError("Heartbeat AudioSource is not assigned in the Inspector!", this);
             return;
+        }
+
+        if (heartbeatAnimator == null)
+        {
+            Debug.LogWarning("Heartbeat Animator is not assigned. Visual effect will not play.", this);
         }
 
         // Configure the AudioSource for the heartbeat effect
@@ -48,7 +62,7 @@ public class HeartBeat : MonoBehaviour
 
     void Update()
     {
-        if (heartbeatSource == null) return; // Stop if the source is not assigned
+        if (!isHeartbeatActive || heartbeatSource == null) return; // Stop if not active or source is not assigned
 
         float closestDistance = float.MaxValue;
         Enemy closestEnemy = null;
@@ -75,16 +89,21 @@ public class HeartBeat : MonoBehaviour
             }
 
             // Calculate the intensity of the effect (0 to 1)
-            // InverseLerp gives us a value of 1 at minDistance and 0 at maxDistance
             float intensity = Mathf.InverseLerp(maxDistance, minDistance, closestDistance);
 
             // Apply the intensity to volume and pitch
             heartbeatSource.volume = Mathf.Lerp(minVolume, maxVolume, intensity);
             heartbeatSource.pitch = Mathf.Lerp(minPitch, maxPitch, intensity);
+
+            // Also apply the intensity to the animator
+            if (heartbeatAnimator != null)
+            {
+                heartbeatAnimator.SetFloat(intensityParameterName, intensity);
+            }
         }
         else
         {
-            // If no enemy is in range, fade out the sound instead of stopping abruptly
+            // If no enemy is in range, fade out the sound
             if (heartbeatSource.isPlaying)
             {
                 heartbeatSource.volume = Mathf.Lerp(heartbeatSource.volume, 0f, Time.deltaTime * 2);
@@ -93,6 +112,45 @@ public class HeartBeat : MonoBehaviour
                     heartbeatSource.Stop();
                 }
             }
+
+            // Also fade out the animation, snapping to zero to ensure it stops
+            if (heartbeatAnimator != null)
+            {
+                float currentIntensity = heartbeatAnimator.GetFloat(intensityParameterName);
+                if (currentIntensity > 0)
+                {
+                    float newIntensity = Mathf.Lerp(currentIntensity, 0f, Time.deltaTime * 2);
+                    if (newIntensity < 0.01f)
+                    {
+                        newIntensity = 0f; // Snap to zero to guarantee the animation stops
+                    }
+                    heartbeatAnimator.SetFloat(intensityParameterName, newIntensity);
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// Immediately stops the heartbeat effect and prevents it from restarting until enabled again.
+    /// </summary>
+    public void StopHeartbeatEffect()
+    {
+        isHeartbeatActive = false;
+        if (heartbeatSource != null)
+        {
+            heartbeatSource.Stop();
+        }
+        if (heartbeatAnimator != null)
+        {
+            heartbeatAnimator.SetFloat(intensityParameterName, 0f);
+        }
+    }
+
+    /// <summary>
+    /// Allows the heartbeat effect to run again.
+    /// </summary>
+    public void EnableHeartbeatEffect()
+    {
+        isHeartbeatActive = true;
     }
 }

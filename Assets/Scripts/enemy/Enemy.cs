@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
-using System.Collections.Generic; // Required for using List
+using System.Collections.Generic;
 
 public enum EnemyState
 {
@@ -283,6 +283,13 @@ public abstract class Enemy : MonoBehaviour
     {
         if (playerMovement != null) playerMovement.SetInputActive(false);// Freeze player
 
+        // Stop the heartbeat effect on the player
+        HeartBeat playerHeartbeat = player?.GetComponent<HeartBeat>();
+        if (playerHeartbeat != null)
+        {
+            playerHeartbeat.StopHeartbeatEffect();
+        }
+
         SwitchToJumpscareCamera();
         if (jumpscareSound != null)
             AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
@@ -317,6 +324,13 @@ public abstract class Enemy : MonoBehaviour
         if (mainCamera != null) mainCamera.gameObject.SetActive(true);
         if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(false);
         if (playerMovement != null) playerMovement.SetInputActive(true);
+
+        // Re-enable the heartbeat effect on the player after respawning
+        HeartBeat playerHeartbeat = player?.GetComponent<HeartBeat>();
+        if (playerHeartbeat != null)
+        {
+            playerHeartbeat.EnableHeartbeatEffect();
+        }
 
         Respawn();
     }
