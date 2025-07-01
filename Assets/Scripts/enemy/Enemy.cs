@@ -25,6 +25,7 @@ public abstract class Enemy : MonoBehaviour
     public float attackCooldown = 2.0f;
     public AudioClip[] enemySounds; // Footsteps, idle, chase, etc.
     public AudioClip jumpscareSound; // Dedicated jumpscare sound
+    public GameObject jumpscareObject; // Jumpscare object (3D model, canvas, etc.)
     public string jumpscareAnimationTrigger = "Jumpscare"; // Animator trigger for jumpscare
     public Animator animator;
     public Transform[] patrolPoints;
@@ -40,6 +41,7 @@ public abstract class Enemy : MonoBehaviour
     private int currentPatrolIndex = 0;
     protected Transform player;
     protected playerMovment playerMovement; // Add this line
+    protected Renderer modelRenderer;
 
     protected Vector3 initialPosition;
     protected Quaternion initialRotation;
@@ -89,6 +91,7 @@ public abstract class Enemy : MonoBehaviour
 
         agent = GetComponent<NavMeshAgent>(); // Add this line
         agent.speed = speed;                  // Also set the agent's speed
+        modelRenderer = GetComponentInChildren<Renderer>();
 
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
 
@@ -124,6 +127,18 @@ public abstract class Enemy : MonoBehaviour
         if (jumpscareSound == null)
         {
             Debug.LogWarning($"{name}: Jumpscare sound not assigned.");
+        }
+        if (jumpscareObject == null)
+        {
+            Debug.LogWarning($"{name}: Jumpscare object not assigned.");
+        }
+        else
+        {
+            jumpscareObject.SetActive(false);
+        }
+        if (modelRenderer == null)
+        {
+            Debug.LogWarning($"{name}: Enemy model renderer not found. Cannot hide/show model during jumpscare.");
         }
     }
 
@@ -291,6 +306,17 @@ public abstract class Enemy : MonoBehaviour
         }
 
         SwitchToJumpscareCamera();
+
+        if (modelRenderer != null)
+        {
+            modelRenderer.enabled = false;
+        }
+
+        if (jumpscareObject != null)
+        {
+            jumpscareObject.SetActive(true);
+        }
+
         if (jumpscareSound != null)
             AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
         if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
@@ -323,6 +349,17 @@ public abstract class Enemy : MonoBehaviour
     {
         if (mainCamera != null) mainCamera.gameObject.SetActive(true);
         if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(false);
+
+        if (jumpscareObject != null)
+        {
+            jumpscareObject.SetActive(false);
+        }
+
+        if (modelRenderer != null)
+        {
+            modelRenderer.enabled = true;
+        }
+
         if (playerMovement != null) playerMovement.SetInputActive(true);
 
         // Re-enable the heartbeat effect on the player after respawning
