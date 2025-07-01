@@ -51,11 +51,16 @@ public class WhiteClown : Enemy
                 break;
         }
 
+        // Only play the animation if it's not already playing.
+        // This prevents the animation from restarting every frame.
         if (clipToPlay != null)
         {
-            // Play the animation for the current state.
-            // The "0" is for the base layer, and "0f" is the normalized time.
-            animator.Play(clipToPlay.name, 0, 0f);
+            // We use GetCurrentAnimatorStateInfo to check the active animation state.
+            // The "0" refers to the base layer of the animator.
+            if (!animator.GetCurrentAnimatorStateInfo(0).IsName(clipToPlay.name))
+            {
+                animator.Play(clipToPlay.name);
+            }
         }
         else
         {
