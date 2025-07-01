@@ -345,7 +345,7 @@ public abstract class Enemy : MonoBehaviour
         if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(true);
     }
 
-    protected void SwitchToMainCamera()
+    protected virtual void SwitchToMainCamera()
     {
         if (mainCamera != null) mainCamera.gameObject.SetActive(true);
         if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(false);

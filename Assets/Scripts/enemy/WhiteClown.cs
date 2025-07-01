@@ -1,10 +1,11 @@
 using UnityEngine;
+using System.Collections;
 
 public class WhiteClown : Enemy
 {
     [Header("WhiteClown Specifics")]
-    public float distortionDuration = 10f;
-    public float distortionIntensity = 1.5f;
+    public float dizzyDuration = 15f; // Set to 15 seconds
+    public float distortionIntensity = 2.5f; // Increased intensity for a stronger effect
 
     [Header("State Animations")]
     public AnimationClip idleAnimation;
@@ -52,11 +53,8 @@ public class WhiteClown : Enemy
         }
 
         // Only play the animation if it's not already playing.
-        // This prevents the animation from restarting every frame.
         if (clipToPlay != null)
         {
-            // We use GetCurrentAnimatorStateInfo to check the active animation state.
-            // The "0" refers to the base layer of the animator.
             if (!animator.GetCurrentAnimatorStateInfo(0).IsName(clipToPlay.name))
             {
                 animator.Play(clipToPlay.name);
@@ -64,20 +62,62 @@ public class WhiteClown : Enemy
         }
         else
         {
-            // Fallback to the base implementation if a clip isn't assigned
             base.UpdateAnimator();
         }
     }
 
     protected override void OnPlayerCaught()
     {
-        // Trigger the standard jumpscare sequence from the base Enemy class
-        TriggerJumpscare();
+        StartCoroutine(ClownJumpscareSequence());
+    }
 
-        // Also, trigger the camera distortion effect
+    private IEnumerator ClownJumpscareSequence()
+    {
+        // 1. Disable player input and hide the main enemy model
+        if (playerMovement != null) playerMovement.SetInputActive(false);
+        if (modelRenderer != null) modelRenderer.enabled = false;
+
+        // 2. Trigger visual and audio effects
+        SwitchToJumpscareCamera();
+        if (jumpscareObject != null) jumpscareObject.SetActive(true);
+        if (jumpscareSound != null) AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
+        if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
+        {
+            animator.SetTrigger(jumpscareAnimationTrigger);
+        }
+
+        // 3. Start the camera distortion effect
         if (cameraDistortion != null)
         {
-            cameraDistortion.StartDistortion(distortionDuration, distortionIntensity);
+            cameraDistortion.StartDistortion(dizzyDuration, distortionIntensity);
         }
+
+        // 4. Wait for the standard jumpscare to finish
+        yield return new WaitForSeconds(jumpscareDuration);
+
+        // 5. Switch back to the main camera and clean up
+        SwitchToMainCamera();
+        if (jumpscareObject != null) jumpscareObject.SetActive(false);
+        if (modelRenderer != null) modelRenderer.enabled = true;
+
+        // 6. Respawn the enemy
+        Respawn();
+
+        // 7. Wait for the remaining duration before re-enabling input
+        float remainingDizzyTime = dizzyDuration - jumpscareDuration;
+        if (remainingDizzyTime > 0)
+        {
+            yield return new WaitForSeconds(remainingDizzyTime);
+        }
+
+        // 8. Re-enable player input
+        if (playerMovement != null) playerMovement.SetInputActive(true);
+    }
+
+    // Override to prevent base class from enabling input too early
+    protected override void SwitchToMainCamera()
+    {
+        if (mainCamera != null) mainCamera.gameObject.SetActive(true);
+        if (jumpscareCamera != null) jumpscareCamera.gameObject.SetActive(false);
     }
 }

@@ -1,8 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.Utilities;
-using UnityEngine.InputSystem.Layouts;
-using UnityEngine.InputSystem.Controls;
+using System.Collections;
 
 public class playerMovment : MonoBehaviour
 {
@@ -14,9 +12,9 @@ public class playerMovment : MonoBehaviour
 
     [Header("References")]
     public Transform cameraTransform;
-        
+
     [Header("Audio")]
-    public AudioSource movementAudioSource; // Renamed from audioSource
+    public AudioSource movementAudioSource;
     public AudioClip walkingSound;
     public AudioClip jumpSound;
 
@@ -93,8 +91,8 @@ public class playerMovment : MonoBehaviour
 
     void HandleLook()
     {
-        float mouseX = lookInput.x * mouseSensitivity;
-        float mouseY = lookInput.y * mouseSensitivity;
+        float mouseX = lookInput.x * mouseSensitivity * Time.deltaTime;
+        float mouseY = lookInput.y * mouseSensitivity * Time.deltaTime;
 
         // Rotate player left/right
         transform.Rotate(Vector3.up * mouseX);
@@ -127,16 +125,28 @@ public class playerMovment : MonoBehaviour
         }
     }
 
+    public void SetInputActive(bool active)
+    {
+        if (active)
+        {
+            inputActions.Enable();
+        }
+        else
+        {
+            inputActions.Disable();
+        }
+    }
+
     // Inline PlayerInputActions class
     private class PlayerInputActions
     {
-        public InputAction Move { get; }
-        public InputAction Look { get; }
-        public InputAction Jump { get; }
+        public readonly InputAction Move;
+        public readonly InputAction Look;
+        public readonly InputAction Jump;
 
         public PlayerInputActions()
         {
-            Move = new InputAction("Move", InputActionType.Value, "<Gamepad>/leftStick");
+            Move = new InputAction("Move", InputActionType.Value);
             Move.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")
@@ -144,11 +154,12 @@ public class playerMovment : MonoBehaviour
                 .With("Right", "<Keyboard>/d");
             Move.AddBinding("<Gamepad>/leftStick");
 
-            Look = new InputAction("Look", InputActionType.Value, "<Mouse>/delta");
+            Look = new InputAction("Look", InputActionType.Value);
             Look.AddBinding("<Mouse>/delta");
             Look.AddBinding("<Gamepad>/rightStick");
 
-            Jump = new InputAction("Jump", InputActionType.Button, "<Keyboard>/space");
+            Jump = new InputAction("Jump", InputActionType.Button);
+            Jump.AddBinding("<Keyboard>/space");
             Jump.AddBinding("<Gamepad>/buttonSouth");
         }
 
@@ -164,17 +175,6 @@ public class playerMovment : MonoBehaviour
             Move.Disable();
             Look.Disable();
             Jump.Disable();
-        }
-    }
-    public void SetInputActive(bool active)
-    {
-        if (active)
-        {
-            inputActions.Enable();
-        }
-        else
-        {
-            inputActions.Disable();
         }
     }
 }
