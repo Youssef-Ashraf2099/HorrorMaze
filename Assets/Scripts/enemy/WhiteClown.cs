@@ -6,6 +6,7 @@ public class WhiteClown : Enemy
     [Header("WhiteClown Specifics")]
     public float dizzyDuration = 15f; // Set to 15 seconds
     public float distortionIntensity = 2.5f; // Increased intensity for a stronger effect
+    private AudioSource jumpscareAudioSource;
 
     [Header("State Animations")]
     public AnimationClip idleAnimation;
@@ -28,6 +29,14 @@ public class WhiteClown : Enemy
         if (player != null)
         {
             cameraDistortion = player.GetComponent<CameraDistortion>();
+        }
+
+        // Add and configure the AudioSource for the jumpscare
+        jumpscareAudioSource = gameObject.AddComponent<AudioSource>();
+        jumpscareAudioSource.playOnAwake = false;
+        if (jumpscareSound != null)
+        {
+            jumpscareAudioSource.clip = jumpscareSound;
         }
     }
 
@@ -80,7 +89,7 @@ public class WhiteClown : Enemy
         // 2. Trigger visual and audio effects
         SwitchToJumpscareCamera();
         if (jumpscareObject != null) jumpscareObject.SetActive(true);
-        if (jumpscareSound != null) AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
+        if (jumpscareAudioSource != null) jumpscareAudioSource.Play();
         if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
         {
             animator.SetTrigger(jumpscareAnimationTrigger);
@@ -95,22 +104,28 @@ public class WhiteClown : Enemy
         // 4. Wait for the standard jumpscare to finish
         yield return new WaitForSeconds(jumpscareDuration);
 
-        // 5. Switch back to the main camera and clean up
+        // 5. Stop the jumpscare sound
+        if (jumpscareAudioSource != null && jumpscareAudioSource.isPlaying)
+        {
+            jumpscareAudioSource.Stop();
+        }
+
+        // 6. Switch back to the main camera and clean up
         SwitchToMainCamera();
         if (jumpscareObject != null) jumpscareObject.SetActive(false);
         if (modelRenderer != null) modelRenderer.enabled = true;
 
-        // 6. Respawn the enemy
+        // 7. Respawn the enemy
         Respawn();
 
-        // 7. Wait for the remaining duration before re-enabling input
+        // 8. Wait for the remaining duration before re-enabling input
         float remainingDizzyTime = dizzyDuration - jumpscareDuration;
         if (remainingDizzyTime > 0)
         {
             yield return new WaitForSeconds(remainingDizzyTime);
         }
 
-        // 8. Re-enable player input
+        // 9. Re-enable player input
         if (playerMovement != null) playerMovement.SetInputActive(true);
     }
 
