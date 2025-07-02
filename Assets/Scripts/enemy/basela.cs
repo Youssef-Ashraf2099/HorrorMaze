@@ -25,6 +25,12 @@ public class basela : Enemy
 
     protected override void OnPlayerCaught()
     {
+        // Decrement player lives
+        if (playerSanity != null)
+        {
+            playerSanity.PlayerCaught();
+        }
+
         Debug.Log($"{name}: Player caught by basela! All keys lost and respawned.");
 
         // Call the GameManager to handle key reset and respawning

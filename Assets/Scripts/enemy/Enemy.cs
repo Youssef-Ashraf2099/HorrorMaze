@@ -41,6 +41,7 @@ public abstract class Enemy : MonoBehaviour
     private int currentPatrolIndex = 0;
     protected Transform player;
     protected playerMovment playerMovement; // Add this line
+    protected Sanity playerSanity; // Reference to the player's sanity script
     protected Renderer modelRenderer;
 
     protected Vector3 initialPosition;
@@ -99,6 +100,7 @@ public abstract class Enemy : MonoBehaviour
         if (player != null)
         {
             playerMovement = player.GetComponent<playerMovment>();
+            playerSanity = player.GetComponent<Sanity>(); // Get the Sanity component
         }
         if (player == null)
         {

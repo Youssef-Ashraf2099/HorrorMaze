@@ -77,6 +77,12 @@ public class WhiteClown : Enemy
 
     protected override void OnPlayerCaught()
     {
+        // Decrement player lives
+        if (playerSanity != null)
+        {
+            playerSanity.PlayerCaught();
+        }
+
         StartCoroutine(ClownJumpscareSequence());
     }
 
