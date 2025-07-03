@@ -23,6 +23,7 @@ public class Twin : Enemy
     private AudioSource jumpscareAudioSource;
     private AudioSource hallucinationAudioSource;
     private static int activeHallucinations = 0;
+    private bool isSequenceActive = false; // Flag to prevent re-triggering the attack
 
     protected override void Start()
     {
@@ -88,10 +89,29 @@ public class Twin : Enemy
     }
 
     /// <summary>
+    /// Called when the player enters the enemy's trigger collider.
+    /// </summary>
+    private void OnTriggerEnter(Collider other)
+    {
+        // Check if the object that entered is the player and if an attack is not already in progress.
+        if (other.CompareTag("Player") && !isSequenceActive)
+        {
+            // To prevent triggers while idle, ensure the enemy is actively hostile.
+            if (currentState == EnemyState.Chasing || currentState == EnemyState.Attacking)
+            {
+                OnPlayerCaught();
+            }
+        }
+    }
+
+    /// <summary>
     /// Overrides the base method to trigger a custom hallucination sequence.
     /// </summary>
     protected override void OnPlayerCaught()
     {
+        // Prevent the sequence from being triggered multiple times.
+        if (isSequenceActive) return;
+
         if (playerSanity != null)
         {
             playerSanity.PlayerCaught();
@@ -106,6 +126,8 @@ public class Twin : Enemy
     /// </summary>
     private IEnumerator JumpscareThenHallucinationSequence()
     {
+        isSequenceActive = true;
+
         // --- Part 1: Jumpscare (2.5 seconds) ---
         TriggerJumpscare();
         yield return new WaitForSeconds(jumpscareDuration);
@@ -159,6 +181,8 @@ public class Twin : Enemy
 
         Respawn();
         if (modelRenderer != null) modelRenderer.enabled = true;
+
+        isSequenceActive = false;
     }
 
     // Override to prevent the base jumpscare from ending too early or re-enabling input
