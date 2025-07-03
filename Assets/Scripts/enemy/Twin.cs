@@ -20,12 +20,21 @@ public class Twin : Enemy
     public AnimationClip chaseAnimation;
     public AnimationClip attackAnimation;
 
+    private AudioSource jumpscareAudioSource;
     private AudioSource hallucinationAudioSource;
     private static int activeHallucinations = 0;
 
     protected override void Start()
     {
         base.Start();
+
+        // Configure a dedicated AudioSource for the jumpscare sound
+        jumpscareAudioSource = gameObject.AddComponent<AudioSource>();
+        jumpscareAudioSource.playOnAwake = false;
+        if (jumpscareSound != null)
+        {
+            jumpscareAudioSource.clip = jumpscareSound;
+        }
 
         // Configure the dedicated AudioSource for hallucination sounds
         hallucinationAudioSource = gameObject.AddComponent<AudioSource>();
@@ -101,6 +110,12 @@ public class Twin : Enemy
         TriggerJumpscare();
         yield return new WaitForSeconds(jumpscareDuration);
 
+        // Stop the jumpscare sound before proceeding.
+        if (jumpscareAudioSource != null && jumpscareAudioSource.isPlaying)
+        {
+            jumpscareAudioSource.Stop();
+        }
+
         // --- Part 2: Hallucination (10 seconds) ---
         // Clean up jumpscare visuals but keep player input frozen.
         if (jumpscareObject != null) jumpscareObject.SetActive(false);
@@ -155,7 +170,13 @@ public class Twin : Enemy
 
         if (modelRenderer != null) modelRenderer.enabled = false;
         if (jumpscareObject != null) jumpscareObject.SetActive(true);
-        if (jumpscareSound != null) AudioSource.PlayClipAtPoint(jumpscareSound, transform.position);
+
+        // Use our controllable AudioSource instead of PlayClipAtPoint
+        if (jumpscareAudioSource != null)
+        {
+            jumpscareAudioSource.Play();
+        }
+
         if (animator != null && !string.IsNullOrEmpty(jumpscareAnimationTrigger))
         {
             animator.SetTrigger(jumpscareAnimationTrigger);
