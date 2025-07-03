@@ -2,6 +2,7 @@ using UnityEngine;
 using TMPro;
 using System.Collections.Generic;
 
+[RequireComponent(typeof(AudioSource))]
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
@@ -12,13 +13,21 @@ public class GameManager : MonoBehaviour
     public int coinCount = 0;
     public int totalCoins;
     public TMP_Text coinText;
+    public AudioClip collectSound; // Assign the collectable sound effect in the Inspector
+
+    private AudioSource audioSource;
 
     void Awake()
     {
         if (Instance == null)
+        {
             Instance = this;
+            audioSource = GetComponent<AudioSource>();
+        }
         else
+        {
             Destroy(gameObject);
+        }
     }
 
     void Start()
@@ -81,6 +90,10 @@ public class GameManager : MonoBehaviour
     {
         coinCount++;
         UpdateCoinUI();
+        if (audioSource != null && collectSound != null)
+        {
+            audioSource.PlayOneShot(collectSound);
+        }
     }
 
     void UpdateCoinUI()
