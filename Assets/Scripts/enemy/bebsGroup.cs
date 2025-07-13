@@ -37,13 +37,25 @@ public class bebsGroup : Enemy
         // Apply the NavMeshAgent's calculated velocity to the character's position
         transform.position = agent.nextPosition;
 
-        // The rotation logic is now handled here during the chase state
+        // --- DYNAMIC ROTATION LOGIC ---
+
+        // 1. While chasing, always look at the player to create the "moonwalk" effect.
         if (currentState == EnemyState.Chasing && player != null)
         {
-            Vector3 direction = (player.position - transform.position).normalized;
-            if (direction != Vector3.zero)
+            Vector3 directionToPlayer = (player.position - transform.position).normalized;
+            if (directionToPlayer != Vector3.zero)
             {
-                Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
+                Quaternion lookRotation = Quaternion.LookRotation(new Vector3(directionToPlayer.x, 0, directionToPlayer.z));
+                transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * rotationSpeed);
+            }
+        }
+        // 2. While patrolling, look in the direction of movement.
+        else if (currentState == EnemyState.Patrolling && agent.velocity.sqrMagnitude > 0.1f)
+        {
+            Vector3 moveDirection = agent.velocity.normalized;
+            if (moveDirection != Vector3.zero)
+            {
+                Quaternion lookRotation = Quaternion.LookRotation(new Vector3(moveDirection.x, 0, moveDirection.z));
                 transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * rotationSpeed);
             }
         }
