@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using System.Collections;
 using System.Collections.Generic;
 
 public enum EnemyState
@@ -46,6 +47,9 @@ public abstract class Enemy : MonoBehaviour
 
     protected Vector3 initialPosition;
     protected Quaternion initialRotation;
+    private float originalSpeed;
+    private Coroutine speedBoostCoroutine;
+    private Coroutine persistentChaseCoroutine;
 
     protected virtual void OnEnable()
     {
@@ -91,6 +95,7 @@ public abstract class Enemy : MonoBehaviour
         initialRotation = transform.rotation;
 
         agent = GetComponent<NavMeshAgent>(); // Add this line
+        originalSpeed = speed;
         agent.speed = speed;                  // Also set the agent's speed
         modelRenderer = GetComponentInChildren<Renderer>();
 
@@ -146,7 +151,7 @@ public abstract class Enemy : MonoBehaviour
 
     protected virtual void Update()
     {
-        if (player == null || currentState == EnemyState.Stunned)
+        if (player == null || currentState == EnemyState.Stunned || persistentChaseCoroutine != null)
         {
             UpdateAnimator(); // Update animator even when stunned to show idle/stun animation
             return;
@@ -333,6 +338,61 @@ public abstract class Enemy : MonoBehaviour
         currentState = EnemyState.Stunned;
         agent.isStopped = true;
         Invoke(nameof(RecoverFromStun), duration);
+    }
+
+    public void ApplySpeedBoost(float amount, float duration)
+    {
+        if (speedBoostCoroutine != null)
+        {
+            StopCoroutine(speedBoostCoroutine);
+        }
+        speedBoostCoroutine = StartCoroutine(SpeedBoostCoroutine(amount, duration));
+    }
+
+    private IEnumerator SpeedBoostCoroutine(float amount, float duration)
+    {
+        speed = originalSpeed + amount;
+        if (agent != null) agent.speed = speed;
+
+        yield return new WaitForSeconds(duration);
+
+        speed = originalSpeed;
+        if (agent != null) agent.speed = speed;
+        speedBoostCoroutine = null;
+    }
+
+    public void SetChaseTarget(Vector3 targetPosition)
+    {
+        currentState = EnemyState.Chasing;
+        if (agent != null)
+        {
+            agent.SetDestination(targetPosition);
+        }
+    }
+
+    public void ChasePlayerForDuration(float duration)
+    {
+        if (persistentChaseCoroutine != null)
+        {
+            StopCoroutine(persistentChaseCoroutine);
+        }
+        persistentChaseCoroutine = StartCoroutine(PersistentChaseCoroutine(duration));
+    }
+
+    private IEnumerator PersistentChaseCoroutine(float duration)
+    {
+        float timer = duration;
+        while (timer > 0)
+        {
+            if (player != null && currentState != EnemyState.Stunned && currentState != EnemyState.Attacking)
+            {
+                currentState = EnemyState.Chasing;
+                agent.SetDestination(player.position);
+            }
+            timer -= Time.deltaTime;
+            yield return null;
+        }
+        persistentChaseCoroutine = null;
     }
 
     protected virtual void RecoverFromStun()
