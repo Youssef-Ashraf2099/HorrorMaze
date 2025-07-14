@@ -15,8 +15,15 @@ public class Hacker : Enemy
     [Tooltip("The angle from the center of the player's view the Hacker must be within.")]
     public float lookAtAngle = 10.0f;
 
+    [Tooltip("The angle defining the 'front' of the Hacker for look detection.")]
+    public float hackerFov = 90.0f; // Player must be within this cone in front of the Hacker
+
+    [Tooltip("A specific point on the Hacker to target for look detection (e.g., the head or chest). If empty, the pivot point is used.")]
+    public Transform lookAtTarget;
+
     [Header("State Animations")]
     public AnimationClip idleAnimation;
+    public AnimationClip patrolAnimation; // Animation for patrolling
     public AnimationClip attackAnimation; // Animation for the jumpscare/prank sequence
 
     [Header("Jumpscare Video")]
@@ -39,16 +46,21 @@ public class Hacker : Enemy
     private float lookTimer = 0f;
     private bool isSequenceActive = false;
     private AudioSource prankAudioSource;
+    private int currentPatrolIndex = 0;
 
     protected override void Start()
     {
         base.Start();
-        // The Hacker should not move, so we keep its agent stopped.
+        // Allow the Hacker to move for patrolling.
         if (agent != null)
         {
-            agent.isStopped = true;
+            agent.isStopped = false;
+            // Set a stopping distance to prevent the Hacker from getting too close to the player.
+            // This ensures the look-at raycast can function correctly.
+            agent.stoppingDistance = this.attackRange;
         }
-        currentState = EnemyState.Idle;
+        // Set initial state to Patrolling if points are assigned.
+        currentState = (patrolPoints != null && patrolPoints.Length > 0) ? EnemyState.Patrolling : EnemyState.Idle;
 
         // --- CRITICAL CHECK: Ensure there is a collider ---
         Collider col = GetComponent<Collider>() ?? GetComponentInChildren<Collider>();
@@ -88,72 +100,114 @@ public class Hacker : Enemy
 
     protected override void Update()
     {
-        // This override prevents the base Enemy.Update() from running.
-        // The Hacker's logic is entirely self-contained.
-        if (isSequenceActive)
+        if (isSequenceActive || player == null)
         {
             return;
         }
 
-        // The Hacker's only "behavior" is to wait for the player to look at it.
+        // Always check if the player is looking at the Hacker's front.
         HandleLookDetection();
 
-        // We still call UpdateAnimator to ensure the idle animation plays correctly.
+        // Check player proximity to decide behavior.
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        if (distanceToPlayer < aggroRange)
+        {
+            currentState = EnemyState.Chasing;
+            ChaseBehavior();
+        }
+        else
+        {
+            // If we were chasing, switch back to patrolling.
+            if (currentState == EnemyState.Chasing)
+            {
+                currentState = EnemyState.Patrolling;
+            }
+
+            if (currentState == EnemyState.Patrolling)
+            {
+                PatrolBehavior();
+            }
+        }
+
+        // Update the animator based on the current state and agent velocity.
         UpdateAnimator();
     }
 
     /// <summary>
     /// Draws a visual representation of the look-at detection cone in the editor.
     /// </summary>
-    private void OnDrawGizmosSelected()
+    protected override void OnDrawGizmosSelected()
     {
-        if (mainCamera != null)
-        {
-            Gizmos.color = Color.yellow;
-            Matrix4x4 originalMatrix = Gizmos.matrix;
-            Gizmos.matrix = mainCamera.transform.localToWorldMatrix;
+        base.OnDrawGizmosSelected(); // Draw the base gizmos (like aggro range)
 
-            // Draw the detection cone from the camera
-            Gizmos.DrawFrustum(Vector3.zero, lookAtAngle * 2, maxLookAtDistance, 0.1f, 1f);
-
-            Gizmos.matrix = originalMatrix;
-        }
+        // Draw the Hacker's own FOV for the jumpscare trigger
+        Gizmos.color = Color.cyan;
+        Vector3 fovLine1 = Quaternion.AngleAxis(hackerFov * 0.5f, transform.up) * transform.forward * maxLookAtDistance;
+        Vector3 fovLine2 = Quaternion.AngleAxis(-hackerFov * 0.5f, transform.up) * transform.forward * maxLookAtDistance;
+        Gizmos.DrawLine(transform.position, transform.position + fovLine1);
+        Gizmos.DrawLine(transform.position, transform.position + fovLine2);
     }
 
     /// <summary>
-    /// Checks if the player is looking directly at the Hacker.
+    /// A more robust method to check if the player is looking at the Hacker.
     /// </summary>
     private void HandleLookDetection()
     {
-        // Ensure we have a reference to the main camera.
         if (mainCamera == null || player == null) return;
 
-        Vector3 directionToEnemy = (transform.position - mainCamera.transform.position).normalized;
-        float angle = Vector3.Angle(mainCamera.transform.forward, directionToEnemy);
+        // Use the specific look-at target if available, otherwise default to the transform's position + an offset.
+        Vector3 targetPoint = lookAtTarget != null ? lookAtTarget.position : transform.position + Vector3.up * 1.5f;
+        float distanceToPlayer = Vector3.Distance(mainCamera.transform.position, transform.position);
 
-        // --- DEBUG: Draw the ray in the scene view ---
-        Debug.DrawRay(mainCamera.transform.position, directionToEnemy * maxLookAtDistance, Color.red);
+        // --- Condition 1: Is the player looking towards the Hacker? ---
+        Vector3 directionToTarget = (targetPoint - mainCamera.transform.position).normalized;
+        float playerLookAngle = Vector3.Angle(mainCamera.transform.forward, directionToTarget);
 
-        if (angle < lookAtAngle && Vector3.Distance(mainCamera.transform.position, transform.position) < maxLookAtDistance)
+        // --- Condition 2: Is the Hacker generally facing the player? ---
+        Vector3 directionToPlayer = (player.position - transform.position).normalized;
+        float hackerFacingAngle = Vector3.Angle(transform.forward, directionToPlayer);
+
+        // Check if the player is within the look-at cone and distance constraints.
+        if (playerLookAngle < lookAtAngle && hackerFacingAngle < hackerFov * 0.5f && distanceToPlayer < maxLookAtDistance)
         {
-            if (Physics.Raycast(mainCamera.transform.position, directionToEnemy, out RaycastHit hit, maxLookAtDistance))
+            bool canSee = false;
+
+            // At very close range, the raycast can fail. We assume clear sight if the player is this close.
+            if (distanceToPlayer < 1.5f)
             {
-                if (hit.transform == this.transform)
+                canSee = true;
+            }
+            else
+            {
+                // Use a Linecast to check for obstructions between the camera and the target point.
+                // This is more reliable than a standard Raycast from inside a collider.
+                if (Physics.Linecast(mainCamera.transform.position, targetPoint, out RaycastHit hit))
                 {
-                    lookTimer += Time.deltaTime;
-                    if (lookTimer >= lookAtDuration)
+                    // We have a clear line of sight if the object hit is part of the Hacker.
+                    if (hit.transform.IsChildOf(this.transform) || hit.transform == this.transform)
                     {
-                        OnPlayerCaught();
+                        canSee = true;
                     }
-                    return;
                 }
                 else
                 {
-                    // --- DEBUG: Log what the ray hit if it wasn't the hacker ---
-                    //Debug.Log($"Hacker look-at raycast hit '{hit.transform.name}' instead of the Hacker.");
+                    // No object was hit, meaning there is a clear line of sight.
+                    canSee = true;
                 }
             }
+
+            if (canSee)
+            {
+                lookTimer += Time.deltaTime;
+                if (lookTimer >= lookAtDuration)
+                {
+                    OnPlayerCaught();
+                }
+                return; // Exit to prevent the timer from resetting.
+            }
         }
+
+        // If any condition fails, reset the timer.
         lookTimer = 0f;
     }
 
@@ -198,6 +252,7 @@ public class Hacker : Enemy
     {
         lookTimer = 0f;
         currentState = EnemyState.Attacking;
+        if (agent != null) agent.isStopped = true; // Stop moving during the attack sequence
 
         // --- Part 1: Jumpscare with Video ---
         TriggerJumpscare();
@@ -274,32 +329,63 @@ public class Hacker : Enemy
     /// </summary>
     protected override void UpdateAnimator()
     {
-        if (animator == null) return;
+        if (animator == null || agent == null) return;
 
-        AnimationClip clipToPlay = null;
-        switch (currentState)
-        {
-            case EnemyState.Idle:
-                clipToPlay = idleAnimation;
-                break;
-            case EnemyState.Attacking:
-                clipToPlay = attackAnimation;
-                break;
-        }
+        // Use agent velocity to drive the "Speed" parameter for walk/idle transitions.
+        float normalizedSpeed = agent.velocity.magnitude / agent.speed;
+        animator.SetFloat("Speed", normalizedSpeed);
 
-        if (clipToPlay != null)
+        // Also handle specific state animations like the attack.
+        if (currentState == EnemyState.Attacking)
         {
-            if (!animator.GetCurrentAnimatorStateInfo(0).IsName(clipToPlay.name))
+            if (attackAnimation != null && !animator.GetCurrentAnimatorStateInfo(0).IsName(attackAnimation.name))
             {
-                animator.Play(clipToPlay.name);
+                animator.Play(attackAnimation.name);
             }
         }
     }
 
     // The Hacker does not use these behaviors, so they are overridden to do nothing.
-    // This prevents the base class from making the Hacker move.
     protected override void IdleBehavior() { }
-    protected override void PatrolBehavior() { }
-    protected override void ChaseBehavior() { }
+
+    protected override void PatrolBehavior()
+    {
+        if (agent != null) agent.updateRotation = true; // Let the agent control rotation while patrolling
+
+        if (patrolPoints == null || patrolPoints.Length == 0)
+        {
+            currentState = EnemyState.Idle;
+            return;
+        }
+
+        if (!agent.pathPending && agent.remainingDistance < 0.5f)
+        {
+            currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.Length;
+            agent.SetDestination(patrolPoints[currentPatrolIndex].position);
+        }
+    }
+
+    /// <summary>
+    /// When the player is close, the Hacker will look at and move towards them.
+    /// </summary>
+    protected override void ChaseBehavior()
+    {
+        if (player == null || agent == null) return;
+
+        // Move towards the player, but stop at the attackRange.
+        agent.SetDestination(player.position);
+
+        // When stalking, the Hacker should be very responsive in looking at the player.
+        // We take manual control of rotation from the NavMeshAgent for a better feel.
+        agent.updateRotation = false;
+
+        Vector3 directionToPlayer = (player.position - transform.position).normalized;
+        if (directionToPlayer != Vector3.zero)
+        {
+            Quaternion lookRotation = Quaternion.LookRotation(new Vector3(directionToPlayer.x, 0, directionToPlayer.z));
+            // Use a dedicated rotation speed to make it feel more alert. A higher value is snappier.
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
+        }
+    }
     protected override void AttackBehavior() { }
 }

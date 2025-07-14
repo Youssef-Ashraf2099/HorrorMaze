@@ -86,6 +86,15 @@ public class basela : Enemy
         // If you want to use the base logic, you can call it directly:
         base.UpdateAnimator();
     }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            OnPlayerCaught();
+        }
+    }
+
     public override void TriggerJumpscare()
     {
         base.TriggerJumpscare();
