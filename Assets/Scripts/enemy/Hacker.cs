@@ -221,10 +221,10 @@ public class Hacker : Enemy
         // --- Part 3: Cleanup and Exit ---
         if (prankAudioSource != null) prankAudioSource.Stop();
 
-        if (prankText != null)
-        {
-            prankText.text = "Get pranked.";
-        }
+        //if (prankText != null)
+        //{
+        //    prankText.text = "Get pranked.";
+        //}
         yield return new WaitForSeconds(3f);
 
         Debug.Log("Hacker prank finished. Quitting application.");
