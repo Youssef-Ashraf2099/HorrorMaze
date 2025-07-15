@@ -24,6 +24,10 @@ public abstract class Enemy : MonoBehaviour
     public float aggroRange = 8.0f;
     public float attackRange = 2.0f;
     public float attackCooldown = 2.0f;
+    // Convention for enemySounds:
+    // [0] = Footstep
+    // [1] = Idle Ambient
+    // [2] = Chase Alert
     public AudioClip[] enemySounds; // Footsteps, idle, chase, etc.
     public AudioClip jumpscareSound; // Dedicated jumpscare sound
     public GameObject jumpscareObject; // Jumpscare object (3D model, canvas, etc.)
@@ -34,11 +38,25 @@ public abstract class Enemy : MonoBehaviour
     public Camera jumpscareCamera;
     public float jumpscareDuration = 2.5f;
 
+    [Header("Audio Settings")]
+    [Tooltip("Time between footstep sounds while moving.")]
+    public float footstepInterval = 0.5f;
+    [Tooltip("Minimum time between idle sounds.")]
+    public float minIdleSoundTime = 5.0f;
+    [Tooltip("Maximum time between idle sounds.")]
+    public float maxIdleSoundTime = 10.0f;
+    [Tooltip("The distance at which the sound starts to fade.")]
+    public float audioMinDistance = 3.0f;
+    [Tooltip("The distance at which the sound is no longer audible.")]
+    public float audioMaxDistance = 50.0f;
+
+
     [Header("State")]
     public EnemyState currentState = EnemyState.Idle;
     protected float lastAttackTime;
 
     protected NavMeshAgent agent;
+    protected AudioSource audioSource;
     private int currentPatrolIndex = 0;
     protected Transform player;
     protected playerMovment playerMovement; // Add this line
@@ -50,6 +68,8 @@ public abstract class Enemy : MonoBehaviour
     private float originalSpeed;
     private Coroutine speedBoostCoroutine;
     private Coroutine persistentChaseCoroutine;
+    private float footstepTimer;
+    private float idleSoundTimer;
 
     protected virtual void OnEnable()
     {
@@ -88,6 +108,12 @@ public abstract class Enemy : MonoBehaviour
         // Draw the attack range
         Gizmos.color = Color.magenta;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        // Draw Audio Ranges
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, audioMinDistance);
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireSphere(transform.position, audioMaxDistance);
     }
     protected virtual void Start()
     {
@@ -95,6 +121,18 @@ public abstract class Enemy : MonoBehaviour
         initialRotation = transform.rotation;
 
         agent = GetComponent<NavMeshAgent>(); // Add this line
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        // Configure AudioSource for 3D sound
+        audioSource.spatialBlend = 1.0f; // Set to 3D
+        audioSource.rolloffMode = AudioRolloffMode.Linear; // Common falloff mode
+        audioSource.minDistance = audioMinDistance;
+        audioSource.maxDistance = audioMaxDistance;
+
         originalSpeed = speed;
         agent.speed = speed;                  // Also set the agent's speed
         modelRenderer = GetComponentInChildren<Renderer>();
@@ -147,6 +185,7 @@ public abstract class Enemy : MonoBehaviour
         {
             Debug.LogWarning($"{name}: Enemy model renderer not found. Cannot hide/show model during jumpscare.");
         }
+        ResetIdleSoundTimer();
     }
 
     protected virtual void Update()
@@ -174,6 +213,7 @@ public abstract class Enemy : MonoBehaviour
         }
 
         UpdateAnimator();
+        HandleSounds();
     }
 
     /// <summary>
@@ -207,17 +247,17 @@ public abstract class Enemy : MonoBehaviour
         transform.rotation = initialRotation;
 
         // Reset the enemy's state to start its cycle over
-        currentState = EnemyState.Idle;
+        TransitionToState(EnemyState.Idle);
     }
     protected virtual void IdleBehavior()
     {
         if (CanSeePlayer() || Vector3.Distance(transform.position, player.position) < aggroRange)
         {
-            currentState = EnemyState.Chasing;
+            TransitionToState(EnemyState.Chasing);
         }
         else if (patrolPoints != null && patrolPoints.Length > 0)
         {
-            currentState = EnemyState.Patrolling;
+            TransitionToState(EnemyState.Patrolling);
         }
     }
 
@@ -225,7 +265,7 @@ public abstract class Enemy : MonoBehaviour
     {
         if (CanSeePlayer() || Vector3.Distance(transform.position, player.position) < aggroRange)
         {
-            currentState = EnemyState.Chasing;
+            TransitionToState(EnemyState.Chasing);
             return;
         }
 
@@ -238,7 +278,7 @@ public abstract class Enemy : MonoBehaviour
             }
             else
             {
-                currentState = EnemyState.Idle;
+                TransitionToState(EnemyState.Idle);
             }
         }
     }
@@ -247,7 +287,7 @@ public abstract class Enemy : MonoBehaviour
     {
         if (!CanSeePlayer() && Vector3.Distance(transform.position, player.position) > aggroRange)
         {
-            currentState = (patrolPoints != null && patrolPoints.Length > 0) ? EnemyState.Patrolling : EnemyState.Idle;
+            TransitionToState((patrolPoints != null && patrolPoints.Length > 0) ? EnemyState.Patrolling : EnemyState.Idle);
             return;
         }
 
@@ -255,7 +295,7 @@ public abstract class Enemy : MonoBehaviour
 
         if (Vector3.Distance(transform.position, player.position) < attackRange)
         {
-            currentState = EnemyState.Attacking;
+            TransitionToState(EnemyState.Attacking);
         }
     }
 
@@ -271,7 +311,7 @@ public abstract class Enemy : MonoBehaviour
         }
         else
         {
-            currentState = EnemyState.Chasing;
+            TransitionToState(EnemyState.Chasing);
         }
     }
 
@@ -293,12 +333,63 @@ public abstract class Enemy : MonoBehaviour
         return false;
     }
 
-    protected void PlaySound(int index)
+    protected void PlaySound(int index, bool oneShot = true)
     {
-        if (enemySounds != null && index >= 0 && index < enemySounds.Length)
+        if (audioSource != null && enemySounds != null && index >= 0 && index < enemySounds.Length)
         {
-            AudioSource.PlayClipAtPoint(enemySounds[index], transform.position);
+            if (oneShot)
+            {
+                audioSource.PlayOneShot(enemySounds[index]);
+            }
+            else
+            {
+                audioSource.clip = enemySounds[index];
+                audioSource.Play();
+            }
         }
+    }
+
+    private void HandleSounds()
+    {
+        bool isMoving = agent.velocity.magnitude > 0.1f && (currentState == EnemyState.Patrolling || currentState == EnemyState.Chasing);
+
+        if (isMoving)
+        {
+            footstepTimer -= Time.deltaTime;
+            if (footstepTimer <= 0)
+            {
+                PlaySound(0); // Play footstep sound
+                footstepTimer = footstepInterval;
+            }
+        }
+
+        if (currentState == EnemyState.Idle)
+        {
+            idleSoundTimer -= Time.deltaTime;
+            if (idleSoundTimer <= 0)
+            {
+                PlaySound(1); // Play idle sound
+                ResetIdleSoundTimer();
+            }
+        }
+    }
+
+    private void ResetIdleSoundTimer()
+    {
+        idleSoundTimer = Random.Range(minIdleSoundTime, maxIdleSoundTime);
+    }
+
+    protected void TransitionToState(EnemyState newState)
+    {
+        if (currentState == newState) return;
+
+        // Play a sound when transitioning to the chase state
+        if (newState == EnemyState.Chasing && currentState != EnemyState.Chasing)
+        {
+            PlaySound(2); // Play chase alert sound
+        }
+
+        currentState = newState;
     }
 
     public virtual void TriggerJumpscare()
@@ -335,7 +426,7 @@ public abstract class Enemy : MonoBehaviour
 
     public virtual void Stun(float duration)
     {
-        currentState = EnemyState.Stunned;
+        TransitionToState(EnemyState.Stunned);
         agent.isStopped = true;
         Invoke(nameof(RecoverFromStun), duration);
     }
@@ -363,7 +454,7 @@ public abstract class Enemy : MonoBehaviour
 
     public void SetChaseTarget(Vector3 targetPosition)
     {
-        currentState = EnemyState.Chasing;
+        TransitionToState(EnemyState.Chasing);
         if (agent != null)
         {
             agent.SetDestination(targetPosition);
@@ -386,7 +477,7 @@ public abstract class Enemy : MonoBehaviour
         {
             if (player != null && currentState != EnemyState.Stunned && currentState != EnemyState.Attacking)
             {
-                currentState = EnemyState.Chasing;
+                TransitionToState(EnemyState.Chasing);
                 agent.SetDestination(player.position);
             }
             timer -= Time.deltaTime;
@@ -397,7 +488,7 @@ public abstract class Enemy : MonoBehaviour
 
     protected virtual void RecoverFromStun()
     {
-        currentState = EnemyState.Idle;
+        TransitionToState(EnemyState.Idle);
         agent.isStopped = false;
     }
 
