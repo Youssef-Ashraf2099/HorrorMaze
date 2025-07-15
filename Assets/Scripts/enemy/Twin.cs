@@ -24,10 +24,17 @@ public class Twin : Enemy
     private AudioSource hallucinationAudioSource;
     private static int activeHallucinations = 0;
     private bool isSequenceActive = false; // Flag to prevent re-triggering the attack
+    private IllusionController illusionController; // Reference to the player's illusion controller
 
     protected override void Start()
     {
         base.Start();
+
+        // Find the IllusionController on the player GameObject.
+        if (player != null)
+        {
+            illusionController = player.GetComponent<IllusionController>();
+        }
 
         // Configure a dedicated AudioSource for the jumpscare sound
         jumpscareAudioSource = gameObject.AddComponent<AudioSource>();
@@ -128,7 +135,7 @@ public class Twin : Enemy
     {
         isSequenceActive = true;
 
-        // --- Part 1: Jumpscare (2.5 seconds) ---
+        // --- Part 1: Jumpscare (Player is frozen) ---
         TriggerJumpscare();
         yield return new WaitForSeconds(jumpscareDuration);
 
@@ -138,19 +145,29 @@ public class Twin : Enemy
             jumpscareAudioSource.Stop();
         }
 
-        // --- Part 2: Hallucination (10 seconds) ---
-        // Clean up jumpscare visuals but keep player input frozen.
+        // --- Part 2: Hallucination (Player can move) ---
+        // Clean up jumpscare visuals and re-enable player input.
         if (jumpscareObject != null) jumpscareObject.SetActive(false);
-        SwitchToMainCamera(); // Switch camera back, but input is still disabled.
+        SwitchToMainCamera();
+        if (playerMovement != null) playerMovement.SetInputActive(true); // Allow player to move
 
         // Start hallucination effects
         activeHallucinations++;
         AudioListener.pause = true;
 
-        if (visionOverlay != null)
+        // Trigger the illusion wall effect
+        if (illusionController != null)
         {
-            visionOverlay.gameObject.SetActive(true);
-            visionOverlay.color = new Color(0, 0, 0, 0.85f);
+            illusionController.TriggerIllusion(hallucinationDuration);
+        }
+        else
+        {
+            // Fallback to vision overlay if the controller is not found
+            if (visionOverlay != null)
+            {
+                visionOverlay.gameObject.SetActive(true);
+                visionOverlay.color = new Color(0, 0, 0, 0.85f);
+            }
         }
 
         if (hallucinationVoices != null && hallucinationVoices.Length > 0)
@@ -171,12 +188,15 @@ public class Twin : Enemy
 
         if (activeHallucinations == 0)
         {
-            if (visionOverlay != null)
+            // The IllusionController handles its own cleanup.
+            // We only need to handle the effects managed by this script.
+            if (visionOverlay != null && visionOverlay.gameObject.activeSelf)
             {
                 visionOverlay.gameObject.SetActive(false);
             }
             AudioListener.pause = false;
-            if (playerMovement != null) playerMovement.SetInputActive(true); // Re-enable input now.
+            // Ensure input is still active, in case another effect disabled it.
+            if (playerMovement != null) playerMovement.SetInputActive(true);
         }
 
         Respawn();
