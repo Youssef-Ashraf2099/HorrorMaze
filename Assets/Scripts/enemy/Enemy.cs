@@ -74,7 +74,7 @@ public abstract class Enemy : MonoBehaviour
     private Coroutine persistentChaseCoroutine;
     private float footstepTimer;
     private float idleSoundTimer;
-    private bool isJumpscaring = false;
+    protected bool isJumpscaring = false;
 
     protected virtual void OnEnable()
     {
@@ -214,7 +214,7 @@ public abstract class Enemy : MonoBehaviour
         {
             case EnemyState.Idle:
                 IdleBehavior();
-                break;
+                break;  
             case EnemyState.Patrolling:
                 PatrolBehavior();
                 break;
@@ -307,7 +307,8 @@ public abstract class Enemy : MonoBehaviour
 
         agent.SetDestination(player.position);
 
-        if (Vector3.Distance(transform.position, player.position) < attackRange)
+        // Only transition to attacking if in range AND the attack is off cooldown.
+        if (Vector3.Distance(transform.position, player.position) < attackRange && Time.time > lastAttackTime + attackCooldown)
         {
             TransitionToState(EnemyState.Attacking);
         }
@@ -318,15 +319,10 @@ public abstract class Enemy : MonoBehaviour
         agent.ResetPath();
         transform.LookAt(player);
 
-        if (Time.time > lastAttackTime + attackCooldown)
-        {
-            lastAttackTime = Time.time;
-            OnPlayerCaught();
-        }
-        else
-        {
-            TransitionToState(EnemyState.Chasing);
-        }
+        // Set the last attack time and trigger the OnPlayerCaught sequence.
+        // The state will be managed by the jumpscare logic from this point.
+        lastAttackTime = Time.time;
+        OnPlayerCaught();
     }
 
     protected virtual void StunnedBehavior() { /* Stun logic here */ }

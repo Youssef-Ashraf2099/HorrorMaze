@@ -29,6 +29,10 @@ public class WhiteClown : Enemy
         if (player != null)
         {
             cameraDistortion = player.GetComponent<CameraDistortion>();
+            if (cameraDistortion == null)
+            {
+                Debug.LogError("WhiteClown Error: The player is missing the 'CameraDistortion' script. The dizzy effect will not work.", this);
+            }
         }
 
         // Add and configure the AudioSource for the jumpscare
@@ -37,6 +41,10 @@ public class WhiteClown : Enemy
         if (jumpscareSound != null)
         {
             jumpscareAudioSource.clip = jumpscareSound;
+        }
+        else
+        {
+            Debug.LogError("WhiteClown Error: The 'Jumpscare Sound' has not been assigned in the Inspector.", this);
         }
     }
 
@@ -77,6 +85,12 @@ public class WhiteClown : Enemy
 
     protected override void OnPlayerCaught()
     {
+        // If a jumpscare is already happening, do nothing.
+        if (isJumpscaring) return;
+
+        // Set the flag immediately to stop all base class behaviors.
+        isJumpscaring = true;
+
         // Decrement player lives
         if (playerSanity != null)
         {
@@ -88,11 +102,22 @@ public class WhiteClown : Enemy
 
     private IEnumerator ClownJumpscareSequence()
     {
-        // 1. Disable player input and hide the main enemy model
+        // 1. Stop all movement and base sounds immediately
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+        if (audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
+        }
+
+        // 2. Disable player input and hide the main enemy model
         if (playerMovement != null) playerMovement.SetInputActive(false);
         if (modelRenderer != null) modelRenderer.enabled = false;
 
-        // 2. Trigger visual and audio effects
+        // 3. Trigger visual and audio effects
         SwitchToJumpscareCamera();
         if (jumpscareObject != null) jumpscareObject.SetActive(true);
         if (jumpscareAudioSource != null) jumpscareAudioSource.Play();
@@ -101,38 +126,43 @@ public class WhiteClown : Enemy
             animator.SetTrigger(jumpscareAnimationTrigger);
         }
 
-        // 3. Start the camera distortion effect
+        // 4. Start the camera distortion effect
         if (cameraDistortion != null)
         {
             cameraDistortion.StartDistortion(dizzyDuration, distortionIntensity);
         }
 
-        // 4. Wait for the standard jumpscare to finish
+        // 5. Wait for the standard jumpscare to finish
         yield return new WaitForSeconds(jumpscareDuration);
 
-        // 5. Stop the jumpscare sound
+        // 6. Stop the jumpscare sound
         if (jumpscareAudioSource != null && jumpscareAudioSource.isPlaying)
         {
             jumpscareAudioSource.Stop();
         }
 
-        // 6. Switch back to the main camera and clean up
+        // 7. Switch back to the main camera and clean up
         SwitchToMainCamera();
         if (jumpscareObject != null) jumpscareObject.SetActive(false);
         if (modelRenderer != null) modelRenderer.enabled = true;
 
-        // 7. Respawn the enemy
+        // 8. Respawn the enemy
         Respawn();
 
-        // 8. Wait for the remaining duration before re-enabling input
+        // 9. Wait for the remaining duration before re-enabling input
         float remainingDizzyTime = dizzyDuration - jumpscareDuration;
         if (remainingDizzyTime > 0)
         {
             yield return new WaitForSeconds(remainingDizzyTime);
         }
 
-        // 9. Re-enable player input
+        // 10. Re-enable player input and reset the enemy's state
         if (playerMovement != null) playerMovement.SetInputActive(true);
+        isJumpscaring = false;
+        if (agent != null)
+        {
+            agent.isStopped = false;
+        }
     }
 
     // Override to prevent base class from enabling input too early
