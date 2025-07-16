@@ -13,7 +13,7 @@ public class basela : Enemy
         speed = 4.5f; // Good speed
         visionDistance = 12.0f; // Moderate vision
         fieldOfView = 100.0f;   // Slightly narrower FOV
-        footstepInterval = 3.0f; // Set hover sound interval to 3 seconds
+       // footstepInterval = 3.0f; // Set hover sound interval to 3 seconds
 
         // Add and configure the AudioSource for the jumpscare
         jumpscareAudioSource = gameObject.AddComponent<AudioSource>();

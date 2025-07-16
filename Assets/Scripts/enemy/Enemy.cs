@@ -12,6 +12,14 @@ public enum EnemyState
     Stunned
 }
 
+[System.Serializable]
+public class EnemyAudioClips
+{
+    public AudioClip Footstep;
+    public AudioClip Idle;
+    public AudioClip ChaseAlert;
+}
+
 public abstract class Enemy : MonoBehaviour
 {
     // Static list to keep track of all enemy instances
@@ -24,11 +32,7 @@ public abstract class Enemy : MonoBehaviour
     public float aggroRange = 8.0f;
     public float attackRange = 2.0f;
     public float attackCooldown = 2.0f;
-    // Convention for enemySounds:
-    // [0] = Footstep
-    // [1] = Idle Ambient
-    // [2] = Chase Alert
-    public AudioClip[] enemySounds; // Footsteps, idle, chase, etc.
+    public EnemyAudioClips enemySounds;
     public AudioClip jumpscareSound; // Dedicated jumpscare sound
     public GameObject jumpscareObject; // Jumpscare object (3D model, canvas, etc.)
     public string jumpscareAnimationTrigger = "Jumpscare"; // Animator trigger for jumpscare
@@ -56,7 +60,7 @@ public abstract class Enemy : MonoBehaviour
     protected float lastAttackTime;
 
     protected NavMeshAgent agent;
-    protected AudioSource audioSource;
+    protected AudioSource audioSource; // Renamed for clarity
     private int currentPatrolIndex = 0;
     protected Transform player;
     protected playerMovment playerMovement; // Add this line
@@ -70,6 +74,7 @@ public abstract class Enemy : MonoBehaviour
     private Coroutine persistentChaseCoroutine;
     private float footstepTimer;
     private float idleSoundTimer;
+    private bool isJumpscaring = false;
 
     protected virtual void OnEnable()
     {
@@ -121,6 +126,8 @@ public abstract class Enemy : MonoBehaviour
         initialRotation = transform.rotation;
 
         agent = GetComponent<NavMeshAgent>(); // Add this line
+
+        // Setup Audio Source
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
         {
@@ -128,10 +135,8 @@ public abstract class Enemy : MonoBehaviour
         }
 
         // Configure AudioSource for 3D sound
-        audioSource.spatialBlend = 1.0f; // Set to 3D
-        audioSource.rolloffMode = AudioRolloffMode.Linear; // Common falloff mode
-        audioSource.minDistance = audioMinDistance;
-        audioSource.maxDistance = audioMaxDistance;
+        ConfigureAudioSource(audioSource);
+
 
         originalSpeed = speed;
         agent.speed = speed;                  // Also set the agent's speed
@@ -153,7 +158,7 @@ public abstract class Enemy : MonoBehaviour
         {
             Debug.LogWarning($"{name}: Animator not assigned. Animations will not play.");
         }
-        if (enemySounds == null || enemySounds.Length == 0)
+        if (enemySounds == null)
         {
             Debug.LogWarning($"{name}: Enemy sounds not assigned. No sounds will play.");
         }
@@ -188,9 +193,18 @@ public abstract class Enemy : MonoBehaviour
         ResetIdleSoundTimer();
     }
 
+    private void ConfigureAudioSource(AudioSource source)
+    {
+        source.spatialBlend = 1.0f; // Set to 3D
+        source.rolloffMode = AudioRolloffMode.Linear; // Common falloff mode
+        source.minDistance = audioMinDistance;
+        source.maxDistance = audioMaxDistance;
+    }
+
     protected virtual void Update()
     {
-        if (player == null || currentState == EnemyState.Stunned || persistentChaseCoroutine != null)
+        // Halt all state machine logic and sound handling if a jumpscare is active.
+        if (player == null || currentState == EnemyState.Stunned || persistentChaseCoroutine != null || isJumpscaring)
         {
             UpdateAnimator(); // Update animator even when stunned to show idle/stun animation
             return;
@@ -333,19 +347,11 @@ public abstract class Enemy : MonoBehaviour
         return false;
     }
 
-    protected void PlaySound(int index, bool oneShot = true)
+    protected void PlaySfx(AudioClip clip)
     {
-        if (audioSource != null && enemySounds != null && index >= 0 && index < enemySounds.Length)
+        if (audioSource != null && clip != null)
         {
-            if (oneShot)
-            {
-                audioSource.PlayOneShot(enemySounds[index]);
-            }
-            else
-            {
-                audioSource.clip = enemySounds[index];
-                audioSource.Play();
-            }
+            audioSource.PlayOneShot(clip);
         }
     }
 
@@ -358,7 +364,7 @@ public abstract class Enemy : MonoBehaviour
             footstepTimer -= Time.deltaTime;
             if (footstepTimer <= 0)
             {
-                PlaySound(0); // Play footstep sound
+                PlaySfx(enemySounds.Footstep); // Play footstep sound
                 footstepTimer = footstepInterval;
             }
         }
@@ -368,7 +374,7 @@ public abstract class Enemy : MonoBehaviour
             idleSoundTimer -= Time.deltaTime;
             if (idleSoundTimer <= 0)
             {
-                PlaySound(1); // Play idle sound
+                PlaySfx(enemySounds.Idle); // Play idle sound
                 ResetIdleSoundTimer();
             }
         }
@@ -386,7 +392,7 @@ public abstract class Enemy : MonoBehaviour
         // Play a sound when transitioning to the chase state
         if (newState == EnemyState.Chasing && currentState != EnemyState.Chasing)
         {
-            PlaySound(2); // Play chase alert sound
+            PlaySfx(enemySounds.ChaseAlert); // Play chase alert sound
         }
 
         currentState = newState;
@@ -394,6 +400,19 @@ public abstract class Enemy : MonoBehaviour
 
     public virtual void TriggerJumpscare()
     {
+        isJumpscaring = true;
+
+        // Stop all movement and sounds immediately
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+        if (audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
+        }
+
         if (playerMovement != null) playerMovement.SetInputActive(false);// Freeze player
 
         // Stop the heartbeat effect on the player
@@ -523,5 +542,12 @@ public abstract class Enemy : MonoBehaviour
         }
 
         Respawn();
+        
+        // Reset the flag and agent after the sequence is over
+        isJumpscaring = false;
+        if (agent != null)
+        {
+            agent.isStopped = false;
+        }
     }
 }
