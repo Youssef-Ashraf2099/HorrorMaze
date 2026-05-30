@@ -13,7 +13,7 @@ public class basela : Enemy
         speed = 4.5f; // Good speed
         visionDistance = 12.0f; // Moderate vision
         fieldOfView = 100.0f;   // Slightly narrower FOV
-       // footstepInterval = 3.0f; // Set hover sound interval to 3 seconds
+                                // footstepInterval = 3.0f; // Set hover sound interval to 3 seconds
 
         // Add and configure the AudioSource for the jumpscare
         jumpscareAudioSource = gameObject.AddComponent<AudioSource>();
@@ -26,6 +26,12 @@ public class basela : Enemy
 
     protected override void OnPlayerCaught()
     {
+        // If a jumpscare is already happening, do nothing.
+        if (isJumpscaring) return;
+
+        // Set the flag immediately to stop all base class behaviors.
+        isJumpscaring = true;
+
         // Decrement player lives
         if (playerSanity != null)
         {
@@ -46,11 +52,22 @@ public class basela : Enemy
 
     private IEnumerator BaselaJumpscareSequence()
     {
-        // 1. Disable player input and hide the main enemy model
+        // 1. Stop all movement and base sounds immediately
+        if (agent != null)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+        if (audioSource != null && audioSource.isPlaying)
+        {
+            audioSource.Stop();
+        }
+
+        // 2. Disable player input and hide the main enemy model
         if (playerMovement != null) playerMovement.SetInputActive(false);
         if (modelRenderer != null) modelRenderer.enabled = false;
 
-        // 2. Trigger visual and audio effects
+        // 3. Trigger visual and audio effects
         SwitchToJumpscareCamera();
         if (jumpscareObject != null) jumpscareObject.SetActive(true);
         if (jumpscareAudioSource != null) jumpscareAudioSource.Play();
@@ -59,23 +76,30 @@ public class basela : Enemy
             animator.SetTrigger(jumpscareAnimationTrigger);
         }
 
-        // 3. Wait for the jumpscare to finish
+        // 4. Wait for the jumpscare to finish
         yield return new WaitForSeconds(jumpscareDuration);
 
-        // 4. Stop the jumpscare sound
+        // 5. Stop the jumpscare sound
         if (jumpscareAudioSource != null && jumpscareAudioSource.isPlaying)
         {
             jumpscareAudioSource.Stop();
         }
 
-        // 5. Switch back to the main camera and clean up
+        // 6. Switch back to the main camera and clean up
         SwitchToMainCamera();
         if (jumpscareObject != null) jumpscareObject.SetActive(false);
         if (modelRenderer != null) modelRenderer.enabled = true;
 
-        // 6. Respawn the enemy and re-enable player input
+        // 7. Respawn the enemy and re-enable player input
         Respawn();
         if (playerMovement != null) playerMovement.SetInputActive(true);
+
+        // 8. Reset the state after the sequence is fully complete
+        isJumpscaring = false;
+        if (agent != null)
+        {
+            agent.isStopped = false;
+        }
     }
 
     protected override void UpdateAnimator()
@@ -98,10 +122,10 @@ public class basela : Enemy
 
     public override void TriggerJumpscare()
     {
-        base.TriggerJumpscare();
-        // Play basela-specific jumpscare animation/sound here
+        // This override can be simplified or removed if the coroutine handles everything.
+        // For now, we ensure it also respects the isJumpscaring flag.
+        if (isJumpscaring) return;
+        OnPlayerCaught();
         Debug.Log($"{name}: basela jumpscare triggered!");
-        // After jumpscare, you might want to switch back to main camera:
-        // SwitchToMainCamera();
     }
 }
